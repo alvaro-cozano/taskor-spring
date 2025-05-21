@@ -141,7 +141,6 @@ public class UserController {
         }
 
         Map<String, Object> responseBody = new HashMap<>();
-        boolean emailChangeRequested = false;
 
         try {
             service.updateProfile(id, userForImmediateUpdate);
@@ -151,7 +150,6 @@ public class UserController {
                 try {
                     service.requestEmailChange(userToUpdate.getUsername(), dto.getEmail());
                     responseBody.put("emailChangeMessage", "Se ha enviado un correo a " + dto.getEmail() + " para confirmar la nueva dirección.");
-                    emailChangeRequested = true;
                 } catch (IllegalArgumentException e) {
                     responseBody.put("emailChangeError", e.getMessage());
                 } catch (MessagingException | IOException e) {
