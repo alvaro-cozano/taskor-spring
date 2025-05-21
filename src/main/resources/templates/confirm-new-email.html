@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Confirma tu nuevo correo electrónico</title>
+</head>
+<body style="margin:0; padding:0; background: linear-gradient(135deg, #13abd1 0%, #414141 100%); min-height:100vh;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="min-height:100vh;">
+        <tr>
+            <td align="center">
+                <table width="500" cellpadding="0" cellspacing="0" style="background:#fff; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.10); padding:40px 32px; margin:40px 0;">
+                    <tr>
+                        <td align="center" style="padding-bottom:24px;">
+                            <img src="cid:logo" alt="Logo Taskor" width="64" height="64" style="display:block; margin-bottom:16px;">
+                            <h2 style="color:#222; font-size:28px; margin:0;">Hola <span th:text="${name}"></span>,</h2>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color:#444; font-size:16px; padding-bottom:24px; text-align:center;">
+                            Has solicitado cambiar tu dirección de correo electrónico en <span style="color:#4f8cff;">Taskor</span></strong>.<br>
+                            Por favor, haz clic en el botón de abajo para confirmar este cambio.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding-bottom:32px;">
+                            <a th:href="${confirmationUrl}" style="background:linear-gradient(90deg,#13abd1, #414141); color:#fff; padding:16px 40px; border-radius:8px; text-decoration:none; font-weight:600; font-size:18px; box-shadow:0 2px 8px rgba(79,140,255,0.15); display:inline-block;">
+                                Confirmar nuevo correo
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color:#888; font-size:13px; text-align:center; padding-bottom:8px;">
+                            Si no solicitaste este cambio, puedes ignorar este correo de forma segura. El enlace expirará en 24 horas.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color:#bbb; font-size:12px; text-align:center; border-top:1px solid #eee; padding-top:24px;">
+                            © 2025 Taskor. Todos los derechos reservados.
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
