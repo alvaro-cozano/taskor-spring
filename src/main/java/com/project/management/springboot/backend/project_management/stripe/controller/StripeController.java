@@ -13,20 +13,19 @@ import com.stripe.model.StripeObject;
 import com.stripe.model.Subscription;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/stripe")
 public class StripeController {
-
-    private static final Logger logger = LoggerFactory.getLogger(StripeController.class);
 
     private final StripeService stripeService;
     private final AppUserService appUserService;
@@ -38,9 +37,7 @@ public class StripeController {
     @Value("${stripe.price.id}")
     private String monthlyPriceId;
 
-    public StripeController(StripeService stripeService, AppUserService appUserService, UserService mainUserService) { // Modifica
-                                                                                                                       // el
-                                                                                                                       // constructor
+    public StripeController(StripeService stripeService, AppUserService appUserService, UserService mainUserService) {
         this.stripeService = stripeService;
         this.appUserService = appUserService;
         this.mainUserService = mainUserService;
@@ -48,7 +45,6 @@ public class StripeController {
 
     public static class CreateCheckoutSessionRequest {
         private String priceId;
-        private String userEmail;
 
         public String getPriceId() {
             return priceId;
@@ -57,67 +53,152 @@ public class StripeController {
         public void setPriceId(String priceId) {
             this.priceId = priceId;
         }
-
-        public String getUserEmail() {
-            return userEmail;
-        }
-
-        public void setUserEmail(String userEmail) {
-            this.userEmail = userEmail;
-        }
     }
 
     @PostMapping("/create-checkout-session")
     public ResponseEntity<Map<String, String>> createCheckoutSession(
-            @RequestBody CreateCheckoutSessionRequest request) {
+            @RequestBody(required = false) CreateCheckoutSessionRequest request,
+            Authentication authentication) {
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "User not authenticated"));
+        }
+
+        String usernameFromToken = authentication.getName();
 
         com.project.management.springboot.backend.project_management.entities.models.User mainAppUser = mainUserService
-                .findByEmail(request.getUserEmail())
-                .orElseThrow(() -> {
-                    logger.error("Usuario principal no encontrado con email: {}", request.getUserEmail());
-                    return new RuntimeException("Usuario principal no encontrado con email: " + request.getUserEmail());
-                });
+                .findByUsername(usernameFromToken)
+                .orElseThrow(() -> new RuntimeException(
+                        "Usuario principal no encontrado con username: " + usernameFromToken));
 
+        String userEmail = mainAppUser.getEmail();
         Long mainAppUserId = mainAppUser.getId();
 
         appUserService.findById(mainAppUserId)
                 .orElseGet(() -> {
-                    logger.warn("Stripe AppUser con ID {} (email {}) no encontrado. Creando uno nuevo.", mainAppUserId,
-                            request.getUserEmail());
-                    AppUser newAppUser = new AppUser(mainAppUserId, mainAppUser.getUsername(), mainAppUser.getEmail());
+                    AppUser newAppUser = new AppUser(mainAppUserId, mainAppUser.getUsername(), userEmail);
                     return appUserService.saveUser(newAppUser);
                 });
 
-        String effectivePriceId = (request.getPriceId() != null && !request.getPriceId().isEmpty())
-                ? request.getPriceId()
-                : this.monthlyPriceId;
+        String priceIdToUse;
+        if (request != null && request.getPriceId() != null && !request.getPriceId().isEmpty()) {
+            priceIdToUse = request.getPriceId();
+        } else {
+            priceIdToUse = this.monthlyPriceId;
+        }
 
         try {
-            Session session = stripeService.createCheckoutSession(effectivePriceId, mainAppUser.getEmail(),
-                    mainAppUserId.toString());
+            Session session = stripeService.createCheckoutSession(userEmail, String.valueOf(mainAppUserId));
             return ResponseEntity.ok(Map.of("sessionId", session.getId(), "checkoutUrl", session.getUrl()));
         } catch (StripeException e) {
-            logger.error("StripeException while creating checkout session: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
     }
 
     @PostMapping("/cancel-subscription")
-    public ResponseEntity<Map<String, String>> cancelSubscription(@RequestBody Map<String, String> payload) {
-        String subscriptionId = payload.get("subscriptionId");
+    public ResponseEntity<Map<String, String>> cancelSubscription(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "User not authenticated"));
+        }
+
+        String usernameFromToken = authentication.getName();
+        com.project.management.springboot.backend.project_management.entities.models.User mainAppUser = mainUserService
+                .findByUsername(usernameFromToken)
+                .orElseThrow(() -> new RuntimeException(
+                        "Usuario principal no encontrado con username: " + usernameFromToken));
+
+        Long mainAppUserId = mainAppUser.getId();
+
+        AppUser appUser = appUserService.findById(mainAppUserId)
+                .orElseThrow(() -> new RuntimeException("AppUser no encontrado para el ID: " + mainAppUserId));
+
+        String subscriptionId = appUser.getStripeSubscriptionId();
+
         if (subscriptionId == null || subscriptionId.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "subscriptionId is required."));
+            return ResponseEntity.badRequest().body(Map.of("error", "No active subscription found for this user."));
         }
 
         try {
             Subscription canceledSubscription = stripeService.cancelSubscription(subscriptionId);
-            logger.info("Subscription {} cancellation initiated. Final status: {}", canceledSubscription.getId(),
-                    canceledSubscription.getStatus());
             return ResponseEntity.ok(Map.of("message", "Subscription cancellation initiated.", "status",
                     canceledSubscription.getStatus()));
         } catch (StripeException e) {
-            logger.error("StripeException while canceling subscription: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/reactivate-subscription")
+    public ResponseEntity<Map<String, String>> reactivateSubscription(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "User not authenticated"));
+        }
+
+        String usernameFromToken = authentication.getName();
+        com.project.management.springboot.backend.project_management.entities.models.User mainAppUser = mainUserService
+                .findByUsername(usernameFromToken)
+                .orElseThrow(() -> new RuntimeException(
+                        "Usuario principal no encontrado con username: " + usernameFromToken));
+
+        Long mainAppUserId = mainAppUser.getId();
+
+        AppUser appUser = appUserService.findById(mainAppUserId)
+                .orElseThrow(() -> new RuntimeException("AppUser no encontrado para el ID: " + mainAppUserId));
+
+        String subscriptionId = appUser.getStripeSubscriptionId();
+
+        if (subscriptionId == null || subscriptionId.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "No subscription found for this user to reactivate."));
+        }
+
+        if (!appUser.isCancelAtPeriodEnd()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Subscription is not scheduled for cancellation."));
+        }
+
+        try {
+            Subscription reactivatedSubscription = stripeService.reactivateSubscription(subscriptionId);
+            appUser.setCancelAtPeriodEnd(false);
+            appUser.setSubscriptionStatus(reactivatedSubscription.getStatus());
+            appUserService.saveUser(appUser);
+
+            if ("active".equals(reactivatedSubscription.getStatus())) {
+                mainUserService.addRoleToUser(mainAppUserId, "Premium");
+            }
+
+            return ResponseEntity.ok(Map.of("message", "Subscription reactivated successfully.", "status",
+                    reactivatedSubscription.getStatus()));
+        } catch (StripeException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/subscription-status")
+    public ResponseEntity<?> getUserSubscriptionStatus(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "User not authenticated"));
+        }
+
+        String usernameFromToken = authentication.getName();
+        com.project.management.springboot.backend.project_management.entities.models.User mainAppUser = mainUserService
+                .findByUsername(usernameFromToken)
+                .orElseThrow(() -> new RuntimeException(
+                        "Usuario principal no encontrado con username: " + usernameFromToken));
+
+        Long mainAppUserId = mainAppUser.getId();
+
+        Optional<AppUser> appUserOptional = appUserService.findById(mainAppUserId);
+        if (appUserOptional.isPresent()) {
+            AppUser appUser = appUserOptional.get();
+            Map<String, Object> response = new HashMap<>();
+            response.put("subscriptionStatus", appUser.getSubscriptionStatus());
+            response.put("stripeSubscriptionId", appUser.getStripeSubscriptionId());
+            response.put("cancelAtPeriodEnd", appUser.isCancelAtPeriodEnd());
+            return ResponseEntity.ok(response);
+        } else {
+            Map<String, Object> response = new HashMap<>();
+            response.put("subscriptionStatus", "not_found");
+            response.put("cancelAtPeriodEnd", false);
+            return ResponseEntity.status(HttpStatus.OK).body(response);
         }
     }
 
@@ -129,65 +210,51 @@ public class StripeController {
         try {
             event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
         } catch (SignatureVerificationException e) {
-            logger.warn("Webhook signature verification failed.", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Signature verification failed.");
         } catch (Exception e) {
-            logger.error("Error parsing webhook event.", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error parsing webhook.");
         }
 
         EventDataObjectDeserializer dataObjectDeserializer = event.getDataObjectDeserializer();
-        StripeObject stripeObject = dataObjectDeserializer.getObject().orElse(null);
+        StripeObject stripeObject = null;
 
-        if (stripeObject == null) {
-            logger.error("Webhook event data object is not present for event type: {}", event.getType());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Webhook event data error.");
+        if (dataObjectDeserializer.getObject().isPresent()) {
+            stripeObject = dataObjectDeserializer.getObject().get();
         }
 
-        logger.info("Received Stripe event: id={}, type={}", event.getId(), event.getType());
+        if (stripeObject == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Webhook event data error.");
+        }
 
         switch (event.getType()) {
             case "checkout.session.completed":
                 Session session = (Session) stripeObject;
-                logger.info("Checkout session completed for customer: {}, subscription: {}", session.getCustomer(),
-                        session.getSubscription());
                 stripeService.handleCheckoutSessionCompleted(session);
                 break;
             case "customer.subscription.created":
-                Subscription subscriptionCreated = (Subscription) stripeObject;
-                logger.info("Subscription created: {} for customer: {}", subscriptionCreated.getId(),
-                        subscriptionCreated.getCustomer());
-                stripeService.handleCustomerSubscriptionCreated(subscriptionCreated);
                 break;
             case "customer.subscription.updated":
                 Subscription subscriptionUpdated = (Subscription) stripeObject;
-                logger.info("Subscription updated: {} to status {}", subscriptionUpdated.getId(),
-                        subscriptionUpdated.getStatus());
                 stripeService.handleCustomerSubscriptionUpdated(subscriptionUpdated);
                 break;
             case "customer.subscription.deleted":
                 Subscription subscriptionDeleted = (Subscription) stripeObject;
-                logger.info("Subscription deleted: {}", subscriptionDeleted.getId());
                 stripeService.handleSubscriptionDeleted(subscriptionDeleted);
                 break;
             case "invoice.created":
                 Invoice invoiceCreated = (Invoice) stripeObject;
-                logger.info("Invoice created: {} for subscription: {}, customer: {}", invoiceCreated.getId(),
-                        invoiceCreated.getSubscription(), invoiceCreated.getCustomer());
                 stripeService.handleInvoiceCreated(invoiceCreated);
                 break;
             case "invoice.payment_succeeded":
                 Invoice invoicePaid = (Invoice) stripeObject;
-                logger.info("Invoice payment succeeded for subscription: {}", invoicePaid.getSubscription());
                 stripeService.handleInvoicePaymentSucceeded(invoicePaid);
                 break;
             case "invoice.payment_failed":
                 Invoice invoiceFailed = (Invoice) stripeObject;
-                logger.info("Invoice payment failed for subscription: {}", invoiceFailed.getSubscription());
                 stripeService.handleInvoicePaymentFailed(invoiceFailed);
                 break;
             default:
-                logger.warn("Unhandled event type: {}", event.getType());
+                break;
         }
 
         return ResponseEntity.ok("Webhook received");

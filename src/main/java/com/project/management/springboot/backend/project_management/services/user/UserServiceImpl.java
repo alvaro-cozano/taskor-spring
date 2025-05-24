@@ -87,7 +87,6 @@ public class UserServiceImpl implements UserService {
             user.setProfileImage(profileImage);
         }
 
-
         String token = UUID.randomUUID().toString();
         user.setVerificationToken(token);
         user.setEnabled(false);
@@ -117,10 +116,8 @@ public class UserServiceImpl implements UserService {
             helper.setText(htmlContent, true);
 
             ClassPathResource logo = new ClassPathResource("static/img/logo.png");
-            if (logo.exists()){
-                 helper.addInline("logo", logo);
-            } else {
-                System.err.println("Logo image not found at classpath:static/img/logo.png for verification email");
+            if (logo.exists()) {
+                helper.addInline("logo", logo);
             }
             mailSender.send(message);
         } catch (Exception e) {
@@ -222,7 +219,8 @@ public class UserServiceImpl implements UserService {
         }
 
         if (incomingUser.getUsername() != null && !incomingUser.getUsername().isBlank()) {
-            if (!existingUser.getUsername().equals(incomingUser.getUsername()) && repository.existsByUsername(incomingUser.getUsername())) {
+            if (!existingUser.getUsername().equals(incomingUser.getUsername())
+                    && repository.existsByUsername(incomingUser.getUsername())) {
                 throw new IllegalArgumentException("El nombre de usuario ya está en uso.");
             }
             existingUser.setUsername(incomingUser.getUsername());
@@ -271,7 +269,6 @@ public class UserServiceImpl implements UserService {
         return passwordEncoder;
     }
 
-
     @Override
     @Transactional
     public void requestEmailChange(String currentUsername, String newEmail) throws MessagingException, IOException {
@@ -288,7 +285,8 @@ public class UserServiceImpl implements UserService {
 
         Optional<User> userWithPendingEmail = repository.findByPendingEmail(newEmail);
         if (userWithPendingEmail.isPresent() && !userWithPendingEmail.get().getId().equals(user.getId())) {
-            throw new IllegalArgumentException("Este correo electrónico ya está pendiente de confirmación para otro usuario.");
+            throw new IllegalArgumentException(
+                    "Este correo electrónico ya está pendiente de confirmación para otro usuario.");
         }
 
         String token = UUID.randomUUID().toString();
@@ -300,7 +298,8 @@ public class UserServiceImpl implements UserService {
         sendEmailChangeConfirmationMail(user, newEmail, token);
     }
 
-    private void sendEmailChangeConfirmationMail(User user, String newEmail, String token) throws MessagingException, IOException {
+    private void sendEmailChangeConfirmationMail(User user, String newEmail, String token)
+            throws MessagingException, IOException {
         String subject = "Confirma tu nuevo correo electrónico en Taskor";
         String confirmationUrl = appBaseUrl + "/auth/confirm-email-change?token=" + token;
 
@@ -322,8 +321,6 @@ public class UserServiceImpl implements UserService {
         ClassPathResource logo = new ClassPathResource("static/img/logo.png");
         if (logo.exists()) {
             helper.addInline("logo", logo);
-        } else {
-            System.err.println("Logo image not found at classpath:static/img/logo.png for email change confirmation");
         }
 
         mailSender.send(mimeMessage);
@@ -353,7 +350,7 @@ public class UserServiceImpl implements UserService {
             repository.save(user);
             return false; // O lanzar una excepción
         }
-        
+
         Optional<User> existingUserWithNewEmail = repository.findByEmail(user.getPendingEmail());
         if (existingUserWithNewEmail.isPresent() && !existingUserWithNewEmail.get().getId().equals(user.getId())) {
 
@@ -361,9 +358,9 @@ public class UserServiceImpl implements UserService {
             user.setEmailChangeToken(null);
             user.setEmailChangeTokenExpiryDate(null);
             repository.save(user);
-            throw new IllegalArgumentException("El correo electrónico '" + user.getPendingEmail() + "' ya ha sido registrado por otro usuario. Por favor, intenta con otro.");
+            throw new IllegalArgumentException("El correo electrónico '" + user.getPendingEmail()
+                    + "' ya ha sido registrado por otro usuario. Por favor, intenta con otro.");
         }
-
 
         user.setEmail(user.getPendingEmail());
         user.setPendingEmail(null);
@@ -395,9 +392,6 @@ public class UserServiceImpl implements UserService {
                 user.getRoles().add(role);
                 repository.save(user);
             }
-        } else {
-            // Considera loggear un aviso si el usuario o el rol no se encuentran
-            System.err.println("Error al añadir rol: Usuario con ID " + userId + " o Rol con nombre " + roleName + " no encontrado.");
         }
     }
 
@@ -414,9 +408,6 @@ public class UserServiceImpl implements UserService {
                 user.getRoles().remove(role);
                 repository.save(user);
             }
-        } else {
-            // Considera loggear un aviso
-             System.err.println("Error al quitar rol: Usuario con ID " + userId + " o Rol con nombre " + roleName + " no encontrado.");
         }
     }
 }

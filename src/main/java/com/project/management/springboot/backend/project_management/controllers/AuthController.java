@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.project.management.springboot.backend.project_management.entities.LoginRequest;
 import com.project.management.springboot.backend.project_management.entities.TokenResponse;
+import com.project.management.springboot.backend.project_management.entities.models.Role;
 import com.project.management.springboot.backend.project_management.entities.models.User;
 import com.project.management.springboot.backend.project_management.repositories.UserRepository;
 import com.project.management.springboot.backend.project_management.security.JwtService;
@@ -12,6 +13,7 @@ import com.project.management.springboot.backend.project_management.security.Tok
 import com.project.management.springboot.backend.project_management.services.user.UserService;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,8 +29,10 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
 @RestController
@@ -285,6 +289,50 @@ public class AuthController {
             return ResponseEntity.ok("Correo de verificación reenviado");
         } catch (Exception e) {
             return ResponseEntity.status(500).body("No se pudo reenviar el correo. Intenta más tarde.");
+        }
+    }
+
+    @GetMapping("/user-roles")
+    public ResponseEntity<?> getUserRoles(HttpServletRequest request) {
+        String header = request.getHeader(TokenJwtConfig.HEADER_AUTHORIZATION);
+
+        if (header == null || !header.startsWith(TokenJwtConfig.PREFIX_TOKEN)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Token no proporcionado o con formato incorrecto."));
+        }
+
+        String token = header.replace(TokenJwtConfig.PREFIX_TOKEN, "");
+
+        try {
+            Claims claims = jwtService.parseToken(token);
+            String username = claims.getSubject();
+
+            if (username == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Token inválido: nombre de usuario no encontrado."));
+            }
+
+            Optional<User> userOptional = userRepository.findByUsername(username);
+
+            if (userOptional.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Usuario '" + username + "' no encontrado."));
+            }
+
+            User user = userOptional.get();
+            List<String> roleNames = user.getRoles().stream()
+                    .map(Role::getName)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(Map.of("username", username, "roles", roleNames));
+
+        } catch (JwtException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Token inválido o expirado: " + e.getMessage()));
+        } catch (Exception e) {
+            // Considera loggear el error 'e' para depuración
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error interno al procesar la solicitud de roles."));
         }
     }
 }

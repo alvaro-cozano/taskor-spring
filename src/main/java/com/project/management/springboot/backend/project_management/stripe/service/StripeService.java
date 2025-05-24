@@ -5,13 +5,14 @@ import com.project.management.springboot.backend.project_management.stripe.model
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
+import com.stripe.model.Invoice;
+import com.stripe.model.InvoiceLineItem;
 import com.stripe.model.Subscription;
 import com.stripe.model.checkout.Session;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.SubscriptionUpdateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import jakarta.annotation.PostConstruct;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.HashMap;
@@ -21,18 +22,20 @@ import java.util.Optional;
 @Service
 public class StripeService {
 
-    private static final Logger logger = LoggerFactory.getLogger(StripeService.class);
     @Value("${stripe.secret.key}")
     private String secretKey;
 
     @Value("${stripe.webhook.secret}")
     private String webhookSecret;
 
-    @Value("${app.base.url:http://localhost:8080}")
-    private String appBaseUrl;
+    @Value("${frontend.base.url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
+    @Value("${stripe.price.id}")
+    private String defaultPriceId;
 
     private final AppUserService appUserService;
-    private final UserService mainUserService; // Debe ser UserService
+    private final UserService mainUserService;
 
     public StripeService(AppUserService appUserService, UserService mainUserService) {
         this.appUserService = appUserService;
@@ -44,9 +47,9 @@ public class StripeService {
         Stripe.apiKey = secretKey;
     }
 
-    public Session createCheckoutSession(String priceId, String userEmail, String userId) throws StripeException {
-        String successUrl = appBaseUrl + "/payment/success?session_id={CHECKOUT_SESSION_ID}";
-        String cancelUrl = appBaseUrl + "/payment/cancel";
+    public Session createCheckoutSession(String userEmail, String userId) throws StripeException {
+        String successUrl = frontendBaseUrl + "/subscription?status=success&session_id={CHECKOUT_SESSION_ID}";
+        String cancelUrl = frontendBaseUrl + "/subscription?status=cancel";
         Customer customer = findOrCreateCustomer(userEmail, userId);
 
         SessionCreateParams params = SessionCreateParams.builder()
@@ -56,10 +59,14 @@ public class StripeService {
                 .setCustomer(customer.getId())
                 .addLineItem(
                         SessionCreateParams.LineItem.builder()
-                                .setPrice(priceId)
+                                .setPrice(defaultPriceId)
                                 .setQuantity(1L)
                                 .build())
                 .putMetadata("userId", userId)
+                .setSubscriptionData(
+                        SessionCreateParams.SubscriptionData.builder()
+                                .putMetadata("userId", userId)
+                                .build())
                 .build();
         return Session.create(params);
     }
@@ -94,7 +101,18 @@ public class StripeService {
 
     public Subscription cancelSubscription(String subscriptionId) throws StripeException {
         Subscription subscription = Subscription.retrieve(subscriptionId);
-        return subscription.cancel();
+        SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
+                .setCancelAtPeriodEnd(true)
+                .build();
+        return subscription.update(params);
+    }
+
+    public Subscription reactivateSubscription(String subscriptionId) throws StripeException {
+        Subscription subscription = Subscription.retrieve(subscriptionId);
+        SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
+                .setCancelAtPeriodEnd(false)
+                .build();
+        return subscription.update(params);
     }
 
     public Subscription getSubscription(String subscriptionId) throws StripeException {
@@ -104,37 +122,36 @@ public class StripeService {
     public void handleCheckoutSessionCompleted(Session session) {
         String customerId = session.getCustomer();
         String subscriptionId = session.getSubscription();
-        String userId = session.getMetadata().get("userId");
+        String userIdString = session.getMetadata().get("userId");
 
-        if (userId != null && customerId != null && subscriptionId != null) {
-            appUserService.updateUserSubscription(userId, customerId, subscriptionId, "active");
-            System.out.println(
-                    "Webhook: Checkout session completed for user: " + userId + ", subscriptionId: " + subscriptionId);
-        } else {
-            System.err.println("Webhook: Checkout session completed but missing critical data. UserID: " + userId
-                    + ", CustomerID: " + customerId + ", SubscriptionID: " + subscriptionId);
+        if (userIdString != null && customerId != null && subscriptionId != null) {
+            appUserService.updateUserSubscription(userIdString, customerId, subscriptionId, "active");
+            try {
+                Long userId = Long.parseLong(userIdString);
+                mainUserService.addRoleToUser(userId, "Premium");
+            } catch (NumberFormatException e) {
+                System.err.println("Error al parsear userId en handleCheckoutSessionCompleted: " + userIdString + " - "
+                        + e.getMessage());
+            }
         }
     }
 
     public void handleSubscriptionDeleted(Subscription subscription) {
         String subscriptionId = subscription.getId();
         appUserService.updateUserSubscriptionStatusBySubId(subscriptionId, "canceled");
-        System.out.println("Webhook: Subscription deleted/canceled: " + subscriptionId);
-    }
 
-    public void handleCustomerSubscriptionCreated(Subscription subscription) {
-        String subscriptionId = subscription.getId();
-        String customerId = subscription.getCustomer();
-        String status = subscription.getStatus();
-
-        System.out.println("Webhook: Customer subscription created. ID: " + subscriptionId + ", Customer: " + customerId
-                + ", Status: " + status);
+        Optional<AppUser> appUserOptional = appUserService.findByStripeSubscriptionId(subscriptionId);
+        if (appUserOptional.isPresent()) {
+            AppUser appUser = appUserOptional.get();
+            mainUserService.removeRoleFromUser(appUser.getId(), "Premium");
+        }
     }
 
     public void handleCustomerSubscriptionUpdated(Subscription subscription) {
         String stripeSubscriptionId = subscription.getId();
         String stripeCustomerId = subscription.getCustomer();
         String status = subscription.getStatus();
+        Boolean cancelAtPeriodEnd = subscription.getCancelAtPeriodEnd();
         String userIdString = subscription.getMetadata().get("userId");
         Long mainUserId = null;
 
@@ -142,88 +159,80 @@ public class StripeService {
             try {
                 mainUserId = Long.parseLong(userIdString);
             } catch (NumberFormatException e) {
-                logger.error("Error al parsear userIdString '{}' de metadata en handleCustomerSubscriptionUpdated.",
-                        userIdString, e);
+                System.err.println("Error al parsear userId en handleCustomerSubscriptionUpdated: " + userIdString
+                        + " - " + e.getMessage());
             }
         } else if (stripeCustomerId != null) {
             Optional<AppUser> appUserOpt = appUserService.findByStripeCustomerId(stripeCustomerId);
             if (appUserOpt.isPresent()) {
                 mainUserId = appUserOpt.get().getId();
-            } else {
-                logger.warn("No se encontró AppUser con stripeCustomerId {} para handleCustomerSubscriptionUpdated.",
-                        stripeCustomerId);
             }
         }
 
         if (mainUserId != null) {
             final Long finalMainUserId = mainUserId;
-            appUserService.findById(mainUserId).ifPresent(appUser -> {
+            appUserService.findById(finalMainUserId).ifPresentOrElse(appUser -> {
                 appUser.setSubscriptionStatus(status);
                 if (appUser.getStripeSubscriptionId() == null && stripeSubscriptionId != null) {
                     appUser.setStripeSubscriptionId(stripeSubscriptionId);
                 }
+                appUser.setCancelAtPeriodEnd(cancelAtPeriodEnd != null && cancelAtPeriodEnd);
                 appUserService.saveUser(appUser);
-                logger.info("AppUser {} actualizado a status '{}' por handleCustomerSubscriptionUpdated.",
-                        finalMainUserId, status);
+            }, () -> {
+                System.err.println(
+                        "AppUser no encontrado con ID: " + finalMainUserId + " en handleCustomerSubscriptionUpdated");
             });
 
-            if ("active".equals(status)) {
+            if ("active".equals(status) && (cancelAtPeriodEnd == null || !cancelAtPeriodEnd)) {
                 mainUserService.addRoleToUser(mainUserId, "Premium");
-                logger.info("Rol Premium añadido al usuario {} por handleCustomerSubscriptionUpdated (status active).",
-                        mainUserId);
-            } else if ("canceled".equals(status) || "incomplete_expired".equals(status) || "past_due".equals(status)
-                    || "unpaid".equals(status) || "trialing".equals(status) || "incomplete".equals(status)) {
-                logger.info(
-                        "Estado de suscripción para usuario {} actualizado a '{}'. La gestión del rol Premium se hará en 'active' o 'deleted'.",
-                        mainUserId, status);
+            } else if ("canceled".equals(status) || "incomplete_expired".equals(status) || "unpaid".equals(status)) {
+                mainUserService.removeRoleFromUser(mainUserId, "Premium");
             }
-        } else {
-            logger.error(
-                    "No se pudo determinar el mainUserId para handleCustomerSubscriptionUpdated. SubscriptionID: {}",
-                    stripeSubscriptionId);
         }
     }
 
-    public void handleInvoiceCreated(com.stripe.model.Invoice invoice) {
-        String invoiceId = invoice.getId();
-        String subscriptionId = invoice.getSubscription();
-        String customerId = invoice.getCustomer();
-        Long amountDue = invoice.getAmountDue();
-
-        System.out.println("Webhook: Invoice created. ID: " + invoiceId + ", Subscription: " + subscriptionId
-                + ", Customer: " + customerId + ", Amount Due: " + amountDue);
+    public void handleInvoiceCreated(Invoice invoice) {
+        if (invoice.getLines() != null && !invoice.getLines().getData().isEmpty()) {
+            InvoiceLineItem firstLineItem = invoice.getLines().getData().get(0);
+            if (firstLineItem.getSubscription() != null) {
+            }
+        }
     }
 
-    public void handleInvoicePaymentSucceeded(com.stripe.model.Invoice invoice) {
-        String subscriptionId = invoice.getSubscription();
+    public void handleInvoicePaymentSucceeded(Invoice invoice) {
+        String subscriptionId = null;
+        if (invoice.getLines() != null && !invoice.getLines().getData().isEmpty()) {
+            InvoiceLineItem firstLineItem = invoice.getLines().getData().get(0);
+            if (firstLineItem.getSubscription() != null) {
+                subscriptionId = firstLineItem.getSubscription();
+            }
+        }
+
         if (subscriptionId != null) {
             appUserService.updateUserSubscriptionStatusBySubId(subscriptionId, "active");
-            System.out.println("Webhook: Invoice payment succeeded for subscription: " + subscriptionId);
         } else {
             String customerId = invoice.getCustomer();
             if (customerId != null) {
                 appUserService.updateUserSubscriptionStatusByCustomerId(customerId, "active");
-                System.out.println("Webhook: Invoice payment succeeded for customer: " + customerId
-                        + " (no direct subscription ID in invoice event)");
-            } else {
-                System.err.println("Webhook: Invoice payment succeeded but no subscription or customer ID found.");
             }
         }
     }
 
-    public void handleInvoicePaymentFailed(com.stripe.model.Invoice invoice) {
-        String subscriptionId = invoice.getSubscription();
+    public void handleInvoicePaymentFailed(Invoice invoice) {
+        String subscriptionId = null;
+        if (invoice.getLines() != null && !invoice.getLines().getData().isEmpty()) {
+            InvoiceLineItem firstLineItem = invoice.getLines().getData().get(0);
+            if (firstLineItem.getSubscription() != null) {
+                subscriptionId = firstLineItem.getSubscription();
+            }
+        }
+
         if (subscriptionId != null) {
             appUserService.updateUserSubscriptionStatusBySubId(subscriptionId, "past_due");
-            System.out.println("Webhook: Invoice payment failed for subscription: " + subscriptionId);
         } else {
             String customerId = invoice.getCustomer();
             if (customerId != null) {
                 appUserService.updateUserSubscriptionStatusByCustomerId(customerId, "past_due");
-                System.out.println("Webhook: Invoice payment failed for customer: " + customerId
-                        + " (no direct subscription ID in invoice event)");
-            } else {
-                System.err.println("Webhook: Invoice payment failed but no subscription or customer ID found.");
             }
         }
     }

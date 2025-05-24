@@ -96,10 +96,9 @@ public class DataSeeder {
                                 User_roles roleUser3 = new User_roles(3L, 1L);
                                 User_roles roleUser4 = new User_roles(4L, 1L);
                                 User_roles roleAdmin = new User_roles(1L, 2L);
-                                User_roles rolePremium = new User_roles(1L, 3L);
 
                                 user_rolesRepository.saveAll(Arrays.asList(roleUser1, roleUser2, roleUser3, roleUser4,
-                                                roleAdmin, rolePremium));
+                                                roleAdmin));
                         }
                         ;
 

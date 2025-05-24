@@ -46,8 +46,6 @@ public class AppUserService {
             user.setStripeSubscriptionId(stripeSubscriptionId);
             user.setSubscriptionStatus(status);
             appUserRepository.save(user);
-            System.out.println("User " + userId + " subscription updated. Stripe Customer ID: " + stripeCustomerId
-                    + ", Subscription ID: " + stripeSubscriptionId + ", Status: " + status);
         });
     }
 
@@ -56,8 +54,6 @@ public class AppUserService {
         appUserRepository.findByStripeSubscriptionId(stripeSubscriptionId).ifPresent(user -> {
             user.setSubscriptionStatus(status);
             appUserRepository.save(user);
-            System.out.println("Subscription " + stripeSubscriptionId + " status updated to " + status + " for user "
-                    + user.getEmail());
         });
     }
 
@@ -66,8 +62,6 @@ public class AppUserService {
         appUserRepository.findByStripeCustomerId(stripeCustomerId).ifPresent(user -> {
             user.setSubscriptionStatus(status);
             appUserRepository.save(user);
-            System.out.println(
-                    "Customer " + stripeCustomerId + " status updated to " + status + " for user " + user.getEmail());
         });
     }
 }
