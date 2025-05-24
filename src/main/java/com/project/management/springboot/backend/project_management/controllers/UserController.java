@@ -116,9 +116,9 @@ public class UserController {
 
         if ((dto.getPassword1() != null || dto.getPassword2() != null)) {
             if (dto.getPassword1() == null || !dto.getPassword1().equals(dto.getPassword2())) {
-                 return ResponseEntity
-                    .badRequest()
-                    .body(Map.of("password", "Las contraseñas no coinciden o una está vacía."));
+                return ResponseEntity
+                        .badRequest()
+                        .body(Map.of("password", "Las contraseñas no coinciden o una está vacía."));
             }
         }
 
@@ -146,14 +146,17 @@ public class UserController {
             service.updateProfile(id, userForImmediateUpdate);
             responseBody.put("message", "Perfil actualizado correctamente.");
 
-            if (dto.getEmail() != null && !dto.getEmail().isBlank() && !dto.getEmail().equalsIgnoreCase(userToUpdate.getEmail())) {
+            if (dto.getEmail() != null && !dto.getEmail().isBlank()
+                    && !dto.getEmail().equalsIgnoreCase(userToUpdate.getEmail())) {
                 try {
                     service.requestEmailChange(userToUpdate.getUsername(), dto.getEmail());
-                    responseBody.put("emailChangeMessage", "Se ha enviado un correo a " + dto.getEmail() + " para confirmar la nueva dirección.");
+                    responseBody.put("emailChangeMessage",
+                            "Se ha enviado un correo a " + dto.getEmail() + " para confirmar la nueva dirección.");
                 } catch (IllegalArgumentException e) {
                     responseBody.put("emailChangeError", e.getMessage());
                 } catch (MessagingException | IOException e) {
-                    responseBody.put("emailChangeError", "Error al enviar el correo de confirmación para el nuevo email.");
+                    responseBody.put("emailChangeError",
+                            "Error al enviar el correo de confirmación para el nuevo email.");
                 }
             }
             return ResponseEntity.ok(responseBody);
@@ -174,7 +177,8 @@ public class UserController {
                 redirectUrl = frontendBaseUrl + "/profile?emailChange=error&reason=invalid_token";
             }
         } catch (IllegalArgumentException e) {
-             redirectUrl = frontendBaseUrl + "/profile?emailChange=error&reason=validation_error&message=" + e.getMessage();
+            redirectUrl = frontendBaseUrl + "/profile?emailChange=error&reason=validation_error&message="
+                    + e.getMessage();
         } catch (Exception e) {
             redirectUrl = frontendBaseUrl + "/profile?emailChange=error&reason=server_error";
         }

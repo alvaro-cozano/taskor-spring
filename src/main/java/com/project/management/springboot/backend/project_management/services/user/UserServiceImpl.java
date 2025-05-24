@@ -372,4 +372,51 @@ public class UserServiceImpl implements UserService {
         repository.save(user);
         return true;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<User> findByEmail(String email) {
+        return repository.findByEmail(email);
+    }
+
+    @Override
+    @Transactional
+    public void addRoleToUser(Long userId, String roleName) {
+        Optional<User> userOptional = repository.findById(userId);
+        Optional<Role> roleOptional = roleRepository.findByName(roleName);
+
+        if (userOptional.isPresent() && roleOptional.isPresent()) {
+            User user = userOptional.get();
+            Role role = roleOptional.get();
+            if (user.getRoles() == null) {
+                user.setRoles(new ArrayList<>());
+            }
+            if (!user.getRoles().contains(role)) {
+                user.getRoles().add(role);
+                repository.save(user);
+            }
+        } else {
+            // Considera loggear un aviso si el usuario o el rol no se encuentran
+            System.err.println("Error al añadir rol: Usuario con ID " + userId + " o Rol con nombre " + roleName + " no encontrado.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void removeRoleFromUser(Long userId, String roleName) {
+        Optional<User> userOptional = repository.findById(userId);
+        Optional<Role> roleOptional = roleRepository.findByName(roleName);
+
+        if (userOptional.isPresent() && roleOptional.isPresent()) {
+            User user = userOptional.get();
+            Role role = roleOptional.get();
+            if (user.getRoles() != null && user.getRoles().contains(role)) {
+                user.getRoles().remove(role);
+                repository.save(user);
+            }
+        } else {
+            // Considera loggear un aviso
+             System.err.println("Error al quitar rol: Usuario con ID " + userId + " o Rol con nombre " + roleName + " no encontrado.");
+        }
+    }
 }

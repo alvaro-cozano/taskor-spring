@@ -37,4 +37,10 @@ public interface UserService {
     void requestEmailChange(String currentUsername, String newEmail) throws MessagingException, IOException;
 
     boolean confirmEmailChange(String token);
+
+    Optional<User> findByEmail(String email);
+
+    void addRoleToUser(Long userId, String roleName);
+
+    void removeRoleFromUser(Long userId, String roleName);
 }

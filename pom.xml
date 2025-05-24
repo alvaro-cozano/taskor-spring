@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.4.5</version>
+		<version>3.4.6</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.project.management.springboot.backend</groupId>
@@ -117,7 +117,6 @@
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
-			<version>1.18.38</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -131,7 +130,7 @@
 		<dependency>
 			<groupId>com.stripe</groupId>
 			<artifactId>stripe-java</artifactId>
-			<version>29.1.0</version>
+			<version>20.131.0</version>
 		</dependency>
 	</dependencies>
 	<build>

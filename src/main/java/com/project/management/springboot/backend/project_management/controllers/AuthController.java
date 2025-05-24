@@ -284,7 +284,6 @@ public class AuthController {
             userService.sendVerificationEmail(user);
             return ResponseEntity.ok("Correo de verificación reenviado");
         } catch (Exception e) {
-            System.out.println("Error al enviar el correo: " + e.getMessage());
             return ResponseEntity.status(500).body("No se pudo reenviar el correo. Intenta más tarde.");
         }
     }
