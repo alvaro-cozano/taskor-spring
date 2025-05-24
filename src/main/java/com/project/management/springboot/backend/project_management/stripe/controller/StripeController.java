@@ -3,7 +3,7 @@ package com.project.management.springboot.backend.project_management.stripe.cont
 import com.project.management.springboot.backend.project_management.stripe.service.StripeService;
 import com.project.management.springboot.backend.project_management.stripe.model.AppUser;
 import com.project.management.springboot.backend.project_management.stripe.service.AppUserService;
-import com.project.management.springboot.backend.project_management.services.user.UserService; // Importa tu UserService principal
+import com.project.management.springboot.backend.project_management.services.user.UserService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
@@ -30,7 +30,7 @@ public class StripeController {
 
     private final StripeService stripeService;
     private final AppUserService appUserService;
-    private final UserService mainUserService; // Inyecta tu UserService principal
+    private final UserService mainUserService;
 
     @Value("${stripe.webhook.secret}")
     private String webhookSecret;
@@ -38,10 +38,12 @@ public class StripeController {
     @Value("${stripe.price.id}")
     private String monthlyPriceId;
 
-    public StripeController(StripeService stripeService, AppUserService appUserService, UserService mainUserService) { // Modifica el constructor
+    public StripeController(StripeService stripeService, AppUserService appUserService, UserService mainUserService) { // Modifica
+                                                                                                                       // el
+                                                                                                                       // constructor
         this.stripeService = stripeService;
         this.appUserService = appUserService;
-        this.mainUserService = mainUserService; // Asigna
+        this.mainUserService = mainUserService;
     }
 
     public static class CreateCheckoutSessionRequest {
@@ -69,35 +71,28 @@ public class StripeController {
     public ResponseEntity<Map<String, String>> createCheckoutSession(
             @RequestBody CreateCheckoutSessionRequest request) {
 
-        com.project.management.springboot.backend.project_management.entities.models.User mainAppUser =
-                mainUserService.findByEmail(request.getUserEmail())
-                        .orElseThrow(() -> {
-                            logger.error("Usuario principal no encontrado con email: {}", request.getUserEmail());
-                            return new RuntimeException("Usuario principal no encontrado con email: " + request.getUserEmail());
-                        });
-        
+        com.project.management.springboot.backend.project_management.entities.models.User mainAppUser = mainUserService
+                .findByEmail(request.getUserEmail())
+                .orElseThrow(() -> {
+                    logger.error("Usuario principal no encontrado con email: {}", request.getUserEmail());
+                    return new RuntimeException("Usuario principal no encontrado con email: " + request.getUserEmail());
+                });
+
         Long mainAppUserId = mainAppUser.getId();
 
-        // Encuentra o crea AppUser, asegurándote de que esté vinculado al mainAppUserId.
-        // AppUser.id ahora es el mainAppUserId.
-        // La siguiente operación asegura que AppUser exista en la BD.
         appUserService.findById(mainAppUserId)
-            .orElseGet(() -> {
-                logger.warn("Stripe AppUser con ID {} (email {}) no encontrado. Creando uno nuevo.", mainAppUserId, request.getUserEmail());
-                AppUser newAppUser = new AppUser(mainAppUserId, mainAppUser.getUsername(), mainAppUser.getEmail());
-                // Se asume que appUserService.saveUser(newAppUser) guarda y devuelve la entidad AppUser.
-                return appUserService.saveUser(newAppUser); 
-            });
-        
-        // Si el AppUser ya existía pero quizás su stripeCustomerId no estaba, podrías querer actualizarlo aquí.
-        // Por ahora, asumimos que findOrCreateCustomer en StripeService lo maneja.
+                .orElseGet(() -> {
+                    logger.warn("Stripe AppUser con ID {} (email {}) no encontrado. Creando uno nuevo.", mainAppUserId,
+                            request.getUserEmail());
+                    AppUser newAppUser = new AppUser(mainAppUserId, mainAppUser.getUsername(), mainAppUser.getEmail());
+                    return appUserService.saveUser(newAppUser);
+                });
 
         String effectivePriceId = (request.getPriceId() != null && !request.getPriceId().isEmpty())
                 ? request.getPriceId()
                 : this.monthlyPriceId;
 
         try {
-            // Pasa mainAppUserId.toString() como el ID de usuario para la metadata de Stripe
             Session session = stripeService.createCheckoutSession(effectivePriceId, mainAppUser.getEmail(),
                     mainAppUserId.toString());
             return ResponseEntity.ok(Map.of("sessionId", session.getId(), "checkoutUrl", session.getUrl()));
@@ -168,7 +163,6 @@ public class StripeController {
                 Subscription subscriptionUpdated = (Subscription) stripeObject;
                 logger.info("Subscription updated: {} to status {}", subscriptionUpdated.getId(),
                         subscriptionUpdated.getStatus());
-                // Delegar toda la lógica de manejo de este evento al servicio
                 stripeService.handleCustomerSubscriptionUpdated(subscriptionUpdated);
                 break;
             case "customer.subscription.deleted":

@@ -1,7 +1,7 @@
 package com.project.management.springboot.backend.project_management.stripe.service;
 
-import com.project.management.springboot.backend.project_management.services.user.UserService; // Importa tu UserService principal
-import com.project.management.springboot.backend.project_management.stripe.model.AppUser; // Asegúrate que esta importación exista si la usas en los métodos no mostrados
+import com.project.management.springboot.backend.project_management.services.user.UserService;
+import com.project.management.springboot.backend.project_management.stripe.model.AppUser;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
@@ -10,8 +10,8 @@ import com.stripe.model.checkout.Session;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger; // Añade esta importación
-import org.slf4j.LoggerFactory; // Añade esta importación
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.HashMap;
@@ -21,21 +21,20 @@ import java.util.Optional;
 @Service
 public class StripeService {
 
-    private static final Logger logger = LoggerFactory.getLogger(StripeService.class); // Definir el logger
-
+    private static final Logger logger = LoggerFactory.getLogger(StripeService.class);
     @Value("${stripe.secret.key}")
     private String secretKey;
 
     @Value("${stripe.webhook.secret}")
     private String webhookSecret;
 
-    @Value("${app.base.url:http://localhost:8080}") // Asegúrate que esta URL sea la correcta para tu frontend
+    @Value("${app.base.url:http://localhost:8080}")
     private String appBaseUrl;
 
     private final AppUserService appUserService;
     private final UserService mainUserService; // Debe ser UserService
 
-    public StripeService(AppUserService appUserService, UserService mainUserService) { // Parámetro debe ser UserService
+    public StripeService(AppUserService appUserService, UserService mainUserService) {
         this.appUserService = appUserService;
         this.mainUserService = mainUserService;
     }
@@ -143,43 +142,45 @@ public class StripeService {
             try {
                 mainUserId = Long.parseLong(userIdString);
             } catch (NumberFormatException e) {
-                logger.error("Error al parsear userIdString '{}' de metadata en handleCustomerSubscriptionUpdated.", userIdString, e);
+                logger.error("Error al parsear userIdString '{}' de metadata en handleCustomerSubscriptionUpdated.",
+                        userIdString, e);
             }
         } else if (stripeCustomerId != null) {
             Optional<AppUser> appUserOpt = appUserService.findByStripeCustomerId(stripeCustomerId);
             if (appUserOpt.isPresent()) {
                 mainUserId = appUserOpt.get().getId();
             } else {
-                 logger.warn("No se encontró AppUser con stripeCustomerId {} para handleCustomerSubscriptionUpdated.", stripeCustomerId);
+                logger.warn("No se encontró AppUser con stripeCustomerId {} para handleCustomerSubscriptionUpdated.",
+                        stripeCustomerId);
             }
         }
-        
+
         if (mainUserId != null) {
-            final Long finalMainUserId = mainUserId; // Necesario para lambda
+            final Long finalMainUserId = mainUserId;
             appUserService.findById(mainUserId).ifPresent(appUser -> {
                 appUser.setSubscriptionStatus(status);
-                // Asegúrate de que el stripeSubscriptionId también esté actualizado si es el primer 'updated' evento que lo trae
                 if (appUser.getStripeSubscriptionId() == null && stripeSubscriptionId != null) {
                     appUser.setStripeSubscriptionId(stripeSubscriptionId);
                 }
                 appUserService.saveUser(appUser);
-                logger.info("AppUser {} actualizado a status '{}' por handleCustomerSubscriptionUpdated.", finalMainUserId, status);
+                logger.info("AppUser {} actualizado a status '{}' por handleCustomerSubscriptionUpdated.",
+                        finalMainUserId, status);
             });
 
             if ("active".equals(status)) {
                 mainUserService.addRoleToUser(mainUserId, "Premium");
-                logger.info("Rol Premium añadido al usuario {} por handleCustomerSubscriptionUpdated (status active).", mainUserId);
-            } else if ("canceled".equals(status) || "incomplete_expired".equals(status) || "past_due".equals(status) || "unpaid".equals(status) || "trialing".equals(status) || "incomplete".equals(status)) {
-                // Para estos estados, solo actualizamos el estado en AppUser.
-                // La eliminación del rol Premium se gestionará exclusivamente mediante el evento 'customer.subscription.deleted'
-                // para asegurar que se elimina solo cuando la suscripción ha terminado definitivamente.
-                // Si el estado es 'active' y luego cambia a 'trialing' (ej. por un nuevo periodo de prueba aplicado),
-                // el rol Premium debería permanecer si así lo deseas, o podrías añadir lógica específica aquí.
-                // Por ahora, solo se añade en 'active'.
-                logger.info("Estado de suscripción para usuario {} actualizado a '{}'. La gestión del rol Premium se hará en 'active' o 'deleted'.", mainUserId, status);
+                logger.info("Rol Premium añadido al usuario {} por handleCustomerSubscriptionUpdated (status active).",
+                        mainUserId);
+            } else if ("canceled".equals(status) || "incomplete_expired".equals(status) || "past_due".equals(status)
+                    || "unpaid".equals(status) || "trialing".equals(status) || "incomplete".equals(status)) {
+                logger.info(
+                        "Estado de suscripción para usuario {} actualizado a '{}'. La gestión del rol Premium se hará en 'active' o 'deleted'.",
+                        mainUserId, status);
             }
         } else {
-            logger.error("No se pudo determinar el mainUserId para handleCustomerSubscriptionUpdated. SubscriptionID: {}", stripeSubscriptionId);
+            logger.error(
+                    "No se pudo determinar el mainUserId para handleCustomerSubscriptionUpdated. SubscriptionID: {}",
+                    stripeSubscriptionId);
         }
     }
 

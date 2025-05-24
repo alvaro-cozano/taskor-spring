@@ -13,7 +13,7 @@ import lombok.Setter;
 public class AppUser {
 
     @Id
-    private Long id; // Este ID será el mismo que el de User.java
+    private Long id;
 
     private String username;
     private String email;
@@ -24,14 +24,12 @@ public class AppUser {
     public AppUser() {
     }
 
-    // Constructor para usar cuando se crea un AppUser vinculado a un User existente
     public AppUser(Long id, String username, String email) {
         this.id = id;
         this.username = username;
         this.email = email;
     }
 
-    // Constructor existente, puede ser útil si creas AppUser antes de tener el ID principal
     public AppUser(String username, String email) {
         this.username = username;
         this.email = email;
