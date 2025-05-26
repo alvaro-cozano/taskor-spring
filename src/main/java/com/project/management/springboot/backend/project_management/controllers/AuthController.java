@@ -17,6 +17,7 @@ import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.GrantedAuthority;
@@ -34,7 +35,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -47,6 +48,9 @@ public class AuthController {
 
     @Autowired
     private UserService userService;
+
+    @Value("${app.front-url}")
+    private String frontendUrl;
 
     @PostMapping("/check-token")
     public ResponseEntity<?> renewToken(HttpServletRequest request) {
@@ -246,7 +250,7 @@ public class AuthController {
     public ResponseEntity<?> verifyUser(@RequestParam String token) {
         Optional<User> optionalUser = userRepository.findByVerificationToken(token);
         if (optionalUser.isEmpty()) {
-            String redirectUrl = "http://localhost:5173/auth/login?token=invalid";
+            String redirectUrl = frontendUrl + "/auth/login?token=invalid";
             return ResponseEntity.status(HttpStatus.FOUND)
                     .header("Location", redirectUrl)
                     .build();
@@ -261,7 +265,7 @@ public class AuthController {
                 .forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName().toUpperCase())));
         String jwt = jwtService.generateToken(user.getUsername(), authorities);
 
-        String redirectUrl = "http://localhost:5173/auth/login?token=" + jwt;
+        String redirectUrl = frontendUrl + "/auth/login?token=" + jwt;
         return ResponseEntity.status(HttpStatus.FOUND)
                 .header("Location", redirectUrl)
                 .build();

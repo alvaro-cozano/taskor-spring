@@ -32,7 +32,7 @@ import com.project.management.springboot.backend.project_management.services.car
 import jakarta.validation.Valid;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 @RequestMapping("/cards")
 public class CardController {
 

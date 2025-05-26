@@ -26,7 +26,7 @@ import com.project.management.springboot.backend.project_management.utils.mapper
 import jakarta.mail.MessagingException;
 import jakarta.validation.Valid;
 
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 @RestController
 @RequestMapping("/auth")
 public class UserController {
@@ -34,7 +34,7 @@ public class UserController {
     @Autowired
     private UserService service;
 
-    @Value("${app.frontend-url:http://localhost:5173}")
+    @Value("${app.front-url}")
     private String frontendBaseUrl;
 
     @GetMapping

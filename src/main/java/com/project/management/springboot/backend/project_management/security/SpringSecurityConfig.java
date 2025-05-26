@@ -2,6 +2,7 @@ package com.project.management.springboot.backend.project_management.security;
 
 import java.util.Arrays;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +26,9 @@ import com.project.management.springboot.backend.project_management.security.fil
 
 @Configuration
 public class SpringSecurityConfig {
+
+    @Value("${app.front-url}")
+    private String frontendUrl;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
@@ -82,7 +86,7 @@ public class SpringSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(Arrays.asList("http://localhost:5173"));
+        config.setAllowedOriginPatterns(Arrays.asList(frontendUrl));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "x-token"));
         config.setAllowCredentials(true);

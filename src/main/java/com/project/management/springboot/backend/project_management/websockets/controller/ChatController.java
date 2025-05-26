@@ -18,7 +18,7 @@ import com.project.management.springboot.backend.project_management.entities.mod
 import com.project.management.springboot.backend.project_management.repositories.UserRepository;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 public class ChatController {
 
         @Autowired

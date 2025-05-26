@@ -10,7 +10,7 @@ import com.project.management.springboot.backend.project_management.DTO.User_boa
 import com.project.management.springboot.backend.project_management.services.user_board.UserBoardService;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 @RequestMapping("/user-board")
 public class UserBoardController {
 

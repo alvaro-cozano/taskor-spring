@@ -26,7 +26,7 @@ import com.project.management.springboot.backend.project_management.services.boa
 import jakarta.validation.Valid;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 @RequestMapping("/boards")
 public class BoardController {
 

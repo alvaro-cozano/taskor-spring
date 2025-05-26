@@ -18,7 +18,7 @@ import java.util.HashMap;
 
 @RestController
 @RequestMapping("/checklist-items")
-@CrossOrigin(origins = "http://localhost:5173", originPatterns = "*")
+@CrossOrigin(origins = "${app.front-url}", originPatterns = "*")
 public class ChecklistItemController {
 
     @Autowired

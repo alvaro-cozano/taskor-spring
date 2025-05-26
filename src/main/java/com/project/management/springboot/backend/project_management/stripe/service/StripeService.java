@@ -28,7 +28,7 @@ public class StripeService {
     @Value("${stripe.webhook.secret}")
     private String webhookSecret;
 
-    @Value("${frontend.base.url:http://localhost:5173}")
+    @Value("${app.front-url}")
     private String frontendBaseUrl;
 
     @Value("${stripe.price.id}")
