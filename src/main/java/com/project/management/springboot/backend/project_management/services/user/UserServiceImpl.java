@@ -53,7 +53,7 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private SpringTemplateEngine templateEngine;
 
-    @Value("${app.base-url:http://localhost:8080}")
+    @Value("${app.base-url}")
     private String appBaseUrl;
 
     @Value("${spring.mail.username}")

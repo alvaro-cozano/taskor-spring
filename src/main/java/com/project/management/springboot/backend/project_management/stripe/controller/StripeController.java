@@ -80,13 +80,6 @@ public class StripeController {
                     return appUserService.saveUser(newAppUser);
                 });
 
-        String priceIdToUse;
-        if (request != null && request.getPriceId() != null && !request.getPriceId().isEmpty()) {
-            priceIdToUse = request.getPriceId();
-        } else {
-            priceIdToUse = this.monthlyPriceId;
-        }
-
         try {
             Session session = stripeService.createCheckoutSession(userEmail, String.valueOf(mainAppUserId));
             return ResponseEntity.ok(Map.of("sessionId", session.getId(), "checkoutUrl", session.getUrl()));
