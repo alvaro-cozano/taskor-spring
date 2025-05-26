@@ -66,6 +66,7 @@ public class SpringSecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/stripe/cancel-subscription").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/stripe/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/stripe/subscription-status").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/stripe/subscription-status/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/stripe/reactivate-subscription").permitAll()
                 .requestMatchers(HttpMethod.GET, "/payment/success").permitAll()
                 .requestMatchers(HttpMethod.GET, "/payment/cancel").permitAll()
